@@ -200,9 +200,132 @@ class Texas
 		// TODO
 		// 每种组合都有一个自己的得分，不可能存在相同的
 		// 这里需要挑出一个最大得分的组合返回
+		$total = count($pool);
+		$r_score = 0;
+		$r_cards = null;
+		foreach (range(0,$total - 2) as $i) {
+			foreach (range($i + 1, $total - 1) as $j) {
+				$pick = array_diff_key($pool, array_flip([$i,$j]));
+				$cards = array_merge($hand, $pick);
+				$score = self::socre($cards);
+				if ($score > $r_score) {
+					$r_score = $score;
+					$r_cards = $cards;
+				}
+			}
+		}
 		return [
-			'cards' => [],
-			'score' => 0,
+			'cards' => $r_cards,
+			'score' => $r_score,
 		];
+	}
+	private static function score($cards)
+	{
+		usort($cards, function($a, $b){
+			return $b['value'] - $a['value']; // 12 - 0
+		});
+		$flush = true;
+		$type = -1;
+		foreach ($cards as $card) {
+			if ($type < 0) {
+				$type = $card['type'];
+			} elseif ($type != $card['type']) {
+				$flush = false;
+			}
+		}
+		$straight = true;
+		$value = -1;
+		$royal = false;
+		$ace = false;
+		foreach ($cards as $card) {
+			if ($value < 0) {
+				if ($card['value'] === 12) {
+					// A,x,x,x,x
+					$ace = true;
+				} else {
+					$value = $card['value'];
+				}
+			} elseif ($value - $card['value'] !== 1) {
+				$straight = false;
+			} else {
+				$value = $card['value'];
+			}
+		}
+		if ($straight && $ace) {
+			if ($cards[1] === 3) { // A,5,4,3,2
+			} elseif ($cards[1] === 11) { // A,K,Q,J,10
+				$royal = true;
+			}
+		}
+		$value = -1;
+		$same_one = [];
+		$same_two = [];
+		$last_card = null;
+		foreach ($cards as $card) {
+			if ($value === $card['value']) {
+				if (empty($same_one) || $same_one[0]['value'] === $card['value']) {
+					$same_one = array_merge($same_one, $last_card, $card);
+				} else {
+					$same_two = array_merge($same_two, $last_card, $card);
+				}
+				$last_card = $card;
+			} else {
+				$value = $card['value'];
+				$last_card = $card;
+			}
+		}
+		// royal flush 200000
+		if ($royal && $flush && $straight) {
+			return 200000;
+		}
+		// straight flush [4,13] + 174000 < 175000
+		if ($flush && $straight) {
+			$tmp = $cards[0]['value'];
+			if ($ace) {
+				$tmp = $cards[1]['value'];
+			}
+			return $tmp + 174000
+		}
+		$score = 0;
+		foreach ($cards as $card) {
+			$score += $card['value'] + 1;
+			$score += 13;
+		}
+		// four of a kind [1,13] * 13 + [1,13] + 173000 < 174000
+		if (count($same_one) === 4) {
+			return $same_one[0]['value'] * 13 + $score;
+		}
+		// fullhouse [1,13] * 13 + [1,13] + 172600 < 173000
+		if (count($same_one) === 3 && count($same_two) === 2) {
+			return $same_one[0]['value'] * 13 + $same_two[0]['value'] + 172600;
+		} else if (count($same_one) === 2 && count($same_two === 3) {
+			return $same_one[0]['value'] + $same_two[0]['value'] * 13 + 172600;
+		}
+		// flush [1,13*6] + 172500 < 172600
+		if ($flush) {
+			return $score + 172500;
+		}
+		// straight [4,13] + 172458 < 172500
+		if ($straight) {
+			$tmp = $cards[0]['value'];
+			if ($ace) {
+				$tmp = $cards[1]['value'];
+			}
+			return $tmp + 172458
+		}
+		// three of a kind [1,13] * 13 * 6 + [1,13*6] + 14274 < 172458
+		if (count($same_one) === 3) {
+			return $same_one[0]['value'] * 13 * 6 + $score + 14274;
+		}
+		// tow pairs [1,13] * 13 * 13 * 6  + [1,13] * 13 * 6 + [1,13*6] < (13 * 13 + 14) * 13 * 6 = 14274
+		if (count($same_one) === 2 && count($same_two) === 2) {
+			return $same_one[0]['value'] * 13 * 13 * 6 + $same_two[0]['value'] * 13 * 6 + $score;
+		}
+		// one pair [1,13] * 13 * 6 + [1,13*6] < 14 * 13 * 6 = 1092
+		if (count($same_one) === 2) {
+			return $same_one[0]['value'] * 13 * 6 + $score;
+		}
+		// hight card [1,13*6] < 78
+		return $score;
 	}
 }

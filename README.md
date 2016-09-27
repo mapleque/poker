@@ -8,10 +8,8 @@ The card define by card index with 13 band:
 ```
 card_index = [0,4*13+2]
 
-card_value = card_index % 13 // 0 - 12
-card_type = card_index / 13 % 4 // 0 - 5
-
-card := card_type:card_value // 0-4:0-12 for 2-10,J,Q,K,A & 5:0,1 for joker
+card_value = card_index % 13 // 0 - 12,0-1 0-8:2-10, 9-12:JQKA, 0-1:joker12
+card_type = card_index / 13 % 4 // 0 - 5 0: 1:diamonds, 2:clubs, 3:hearts, 4:spades, 5:joker
 ```
 
 # public interface
