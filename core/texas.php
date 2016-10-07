@@ -4,17 +4,17 @@ class Texas
 	public static function create($user_id)
 	{
 		$sql = 'SELECT id FROM user_log WHERE user_id = ? && status != ? LIMIT 1';
-		if (count(DB::select($sql, [ $user_id, SLS_FINISH ]) > 0) {
+		if (count(DB::select($sql, [ $user_id, SLS_FINISH ])) > 0) {
 			return -1;
 		}
 		DB::begin();
-		$sql = 'INSERT INTO set_info (time) VALUSE (NOW())';
-		$set_id = DB::insert($sql);
+		$sql = 'INSERT INTO set_info (rule, status, time) VALUES (?,?,NOW())';
+		$set_id = DB::insert($sql, [ 'Texas', SLS_CREATE ]);
 		if ($set_id <= 0) {
 			DB::commit(false);
 			return -2;
 		}
-		$sql = 'INSERT INOT user_log (user_id, set_id, status, time) VALUSE (?,?,?,NOW())';
+		$sql = 'INSERT INTO user_log (user_id, set_id, status, time) VALUES (?,?,?,NOW())';
 		$log_id = DB::insert($sql, [ $user_id, $set_id, SLS_CREATE ]);
 		if ($log_id <= 0) {
 			DB::commit(false);
@@ -27,10 +27,10 @@ class Texas
 	{
 		$sql = 'SELECT id FROM user_log
 				WHERE user_id = ? && status != ? LIMIT 1';
-		if (count(DB::select($sql, [ $user_id, SLS_FINISH ]) > 0) {
+		if (count(DB::select($sql, [ $user_id, SLS_FINISH ])) > 0) {
 			return false;
 		}
-		$sql = 'INSERT INOT user_log (user_id, set_id, status, time) VALUSE (?,?,?,NOW())';
+		$sql = 'INSERT INTO user_log (user_id, set_id, status, time) VALUES (?,?,?,NOW())';
 		$log_id = DB::insert($sql, [ $user_id, $set_id, SLS_CREATE ]);
 		if ($log_id <= 0) {
 			return false;
@@ -46,8 +46,8 @@ class Texas
 			DB::commit(false);
 			return false;
 		}
-		$sql = 'SELECT id FROM user_log WHERE set_id = ? && status = ? LIMIT 1';
-		if (count(DB::select($sql, [ $set_id, SLS_READY ]) === 0) {
+		$sql = 'SELECT id FROM user_log WHERE set_id = ? && status != ? LIMIT 1';
+		if (count(DB::select($sql, [ $set_id, SLS_READY ])) === 0) {
 			if (!self::init($set_id)) {
 				DB::commit(false);
 				return false;
@@ -78,14 +78,25 @@ class Texas
 		$players = DB::select($sql, [ $set_id ]);
 		$total_score = 0;
 		foreach ($players as &$player) {
+			if ($player['user_id'] !== $user_id) {
+				$player['hand'] = [];
+				$player['pool'] = [];
+			} else {
+				$player['hand'] = json_decode($player['hand'], true);
+				$player['pool'] = json_decode($player['pool'], true);
+			}
 			$total_score += $player['score'];
-			$player['hand'] = json_decode($player['hand'], true);
-			$player['pool'] = json_decode($player['pool'], true);
 		}
 		unset($player);
+		$sql = 'SELECT rule, action_stack, pool, win_info FROM set_info WHERE id = ? LIMIT 1';
+		$set_info = DB::select($sql, [ $set_id ])[0];
+		$set_info['action_stack'] = $set_info['action_stack'] ? json_decode($set_info['action_stack'], true) : [];
+		$set_info['pool'] = $set_info['pool'] ? json_decode($set_info['pool'], true) : [];
+		$set_info['win_info'] = $set_info['win_info'] ? json_decode($set_info['win_info'], true) : [];
 		return [
 			'players' => $players,
 			'total_score' => $total_score,
+			'set_info' => $set_info,
 		];
 	}
 	private static function init($set_id)
@@ -108,21 +119,21 @@ class Texas
 			'type' => SA_END,
 		];
 
-		$cards_stack = Poker::init(range(0, 52));
-		Poker::shuffle($cards_stack);
-		$pool = Poker::get(2);
+		$card_stack = Poker::init(range(0, 51));
+		Poker::shuffle($card_stack);
+		$pool = Poker::get(2, $card_stack);
 		foreach ($players as $player) {
 			$hand = Poker::get(2, $card_stack);
 			$sql = 'UPDATE user_log SET hand = ?
 					WHERE user_id = ? && set_id = ? LIMIT 1';
 			if (DB::update($sql,
-				[ json_encode($hand), json_encode($pool), $player['user_id'], $set_id ]) !== 1) {
+				[ json_encode($hand), $player['user_id'], $set_id ]) !== 1) {
 				return false;
 			}
 		}
-		$sql = 'UPDATE set_info SET action_stack = ? && card_stack = ?, pool = ?
+		$sql = 'UPDATE set_info SET status = ?, action_stack = ?, card_stack = ?, pool = ?
 				WHERE id = ? LIMIT 1';
-		$bind = [ json_encode($action_stack), json_encode($card_stack),
+		$bind = [ SLS_READY, json_encode($action_stack), json_encode($card_stack),
 			json_encode($pool), $set_id ];
 		if (DB::update($sql, $bind) !== 1) {
 			return false;
@@ -172,7 +183,7 @@ class Texas
 		$win_info = [];
 		$total_score = 0;
 		foreach ($players as $player) {
-			$win_info[$player['user_id'] = self::calc(json_decode($player['hand'], true), $pool);
+			$win_info[$player['user_id']] = self::calc(json_decode($player['hand'], true), $pool);
 			$total_score += $player['score'];
 		}
 		$win_info['total_socre'] = $total_score;
@@ -185,8 +196,8 @@ class Texas
 			}
 		}
 		$win_info['winner'] = $winner;
-		$sql = 'UPDATE set_info SET win_info = ? WHERE id = ? LIMIT 1';
-		if (DB::update($sql, [ json_encode($win_info), $set_id) !== 1) {
+		$sql = 'UPDATE set_info SET status = ?, win_info = ? WHERE id = ? LIMIT 1';
+		if (DB::update($sql, [ SLS_FINISH, json_encode($win_info), $set_id ]) !== 1) {
 			return false;
 		}
 		$sql = 'UPDATE user_log SET status = ? WHERE set_id = ?';
@@ -284,7 +295,7 @@ class Texas
 			if ($ace) {
 				$tmp = $cards[1]['value'];
 			}
-			return $tmp + 174000
+			return $tmp + 174000;
 		}
 		$score = 0;
 		foreach ($cards as $card) {
@@ -298,7 +309,7 @@ class Texas
 		// fullhouse [1,13] * 13 + [1,13] + 172600 < 173000
 		if (count($same_one) === 3 && count($same_two) === 2) {
 			return $same_one[0]['value'] * 13 + $same_two[0]['value'] + 172600;
-		} else if (count($same_one) === 2 && count($same_two === 3) {
+		} else if (count($same_one) === 2 && count($same_two === 3)) {
 			return $same_one[0]['value'] + $same_two[0]['value'] * 13 + 172600;
 		}
 		// flush [1,13*6] + 172500 < 172600
@@ -311,7 +322,7 @@ class Texas
 			if ($ace) {
 				$tmp = $cards[1]['value'];
 			}
-			return $tmp + 172458
+			return $tmp + 172458;
 		}
 		// three of a kind [1,13] * 13 * 6 + [1,13*6] + 14274 < 172458
 		if (count($same_one) === 3) {

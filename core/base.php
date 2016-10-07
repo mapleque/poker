@@ -6,6 +6,7 @@ require dirname(__FILE__) . '/status.php';
 
 ClassLoader::appendMap([
 	'User'			=> 'user',
+	'Game'			=> 'game',
 	'Poker'			=> 'poker',
 	'Texas'			=> 'texas',
 ]);

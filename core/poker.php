@@ -5,10 +5,13 @@ class Poker
 	{
 		$ret = [];
 		foreach ($index_array as $index) {
+			$type = floor($index / 13);
+			$value = $index % 13;
 			$ret[] = [
 				'index' => $index,
-				'type' => floor($index / 13) % 4,
-				'value' => $index % 13,
+				'type' => $type,
+				'value' => $value,
+				'name' => $type . '-' . $value,
 			];
 		}
 		return $ret;
@@ -22,9 +25,9 @@ class Poker
 	{
 		if ($reverse) {
 			$count = count($cards_array);
-			$cards = array_splice($count - $num, $num, $cards_array);
+			$cards = array_splice($cards_array, $count - $num, $num);
 		} else {
-			$cards = array_splice(0, $num, $cards_array);
+			$cards = array_splice($cards_array, 0, $num);
 		}
 		return $cards;
 	}
@@ -33,7 +36,7 @@ class Poker
 		arsort($index_array);
 		$ret = [];
 		foreach ($index_array as $index) {
-			array_merge($ret, array_splice($index, 1, $cards_array);
+			array_merge($ret, array_splice($cards_array, $index, 1));
 		}
 		return $ret;
 	}

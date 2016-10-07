@@ -1,0 +1,9 @@
+<div>
+	<div>桌</div>
+	<%_.map(user_list, function(v,k){%>
+		<div><%=v.username%></div>
+	<%})%>
+	<div><%=member%></div>
+	<input type="button" name="ready" value="ready" data-id="<%=game_id%>">
+</div>
+
